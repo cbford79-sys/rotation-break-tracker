@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#111827" />
+<title>Rotation Break Tracker</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111827; --panel2:#172033; --text:#f8fafc; --muted:#94a3b8;
+    --border:#263248; --accent:#7c3aed; --accent2:#a78bfa; --good:#16a34a; --warn:#f59e0b;
+    --danger:#dc2626; --shadow:0 18px 45px rgba(0,0,0,.28); --radius:20px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background:linear-gradient(180deg,#09101c 0%,#0b1220 100%); color:var(--text); min-height:100vh;
+  }
+  button,input,select,textarea{font:inherit}
+  button{cursor:pointer}
+  .app{max-width:980px;margin:0 auto;padding:18px 14px 90px}
+  header{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 18px;
+  }
+  h1{font-size:clamp(1.5rem,4vw,2.1rem);margin:0}
+  .sub{color:var(--muted);font-size:.9rem;margin-top:4px}
+  .pill{background:#1e293b;color:#e2e8f0;border:1px solid var(--border);padding:8px 12px;border-radius:999px;font-weight:700}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .stat{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:var(--shadow)}
+  .stat b{display:block;font-size:1.55rem;margin-top:4px}
+  .stat span{color:var(--muted);font-size:.82rem}
+  nav{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:8px;position:sticky;top:0;z-index:5;
+    background:rgba(11,18,32,.88);backdrop-filter:blur(12px);padding:8px 0 12px;margin-bottom:12px
+  }
+  nav button{
+    border:1px solid var(--border);background:#111827;color:#cbd5e1;border-radius:14px;padding:12px 8px;font-weight:800
+  }
+  nav button.active{background:var(--accent);color:white;border-color:transparent}
+  .section{display:none}.section.active{display:block}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+  .panel + .panel{margin-top:14px}
+  .panel-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+  .panel-title h2{font-size:1.05rem;margin:0}
+  .team-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+  .member{
+    background:var(--panel2);border:1px solid var(--border);border-radius:18px;padding:15px;
+    display:flex;flex-direction:column;gap:12px;min-height:170px
+  }
+  .member.out{border-color:#f59e0b;box-shadow:0 0 0 1px rgba(245,158,11,.2)}
+  .member-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .name{font-weight:900;font-size:1.1rem}
+  .status{font-size:.72rem;font-weight:900;border-radius:999px;padding:6px 9px}
+  .status.in{background:rgba(22,163,74,.18);color:#86efac}
+  .status.out{background:rgba(245,158,11,.18);color:#fcd34d}
+  .rot{color:#fcd34d;font-size:.9rem}
+  .member button,.primary,.secondary,.danger{
+    border:none;border-radius:14px;padding:12px 14px;font-weight:900
+  }
+  .member button,.primary{background:var(--accent);color:white}
+  .secondary{background:#243049;color:#e2e8f0}
+  .danger{background:#451a1a;color:#fecaca}
+  .muted{color:var(--muted)}
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:12px 9px;border-bottom:1px solid var(--border);font-size:.9rem;vertical-align:top}
+  th{color:#cbd5e1;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+  .table-wrap{overflow:auto}
+  .empty{padding:28px 10px;text-align:center;color:var(--muted)}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap}
+  input,select,textarea{
+    width:100%;background:#0f172a;color:white;border:1px solid #334155;border-radius:14px;padding:12px 13px;outline:none
+  }
+  input:focus,select:focus,textarea:focus{border-color:var(--accent2);box-shadow:0 0 0 3px rgba(167,139,250,.12)}
+  label{display:block;color:#cbd5e1;font-size:.85rem;font-weight:800;margin-bottom:6px}
+  .field{margin-bottom:12px}
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(0,0,0,.68);display:none;align-items:flex-end;justify-content:center;z-index:50;padding:10px
+  }
+  .modal-backdrop.show{display:flex}
+  .modal{
+    width:min(560px,100%);background:#111827;border:1px solid var(--border);border-radius:24px 24px 18px 18px;
+    padding:18px;box-shadow:0 24px 80px rgba(0,0,0,.45)
+  }
+  .modal h3{margin:0 0 14px}
+  .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+  .actions button{flex:1}
+  .big-rotation{font-size:1.6rem;letter-spacing:.18em;text-align:center;font-weight:900}
+  .filters{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .small{font-size:.78rem}
+  .edited{color:#c4b5fd;font-size:.72rem;font-weight:800}
+  .member-list{display:grid;gap:8px}
+  .manage-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;background:var(--panel2);padding:10px;border-radius:14px}
+  footer{color:#64748b;text-align:center;font-size:.74rem;margin-top:22px}
+  @media(max-width:650px){
+    .stats{grid-template-columns:1fr 1fr 1fr}
+    .stat{padding:11px}.stat b{font-size:1.25rem}
+    nav button{font-size:.78rem;padding:10px 5px}
+    .filters{grid-template-columns:1fr}
+    th,td{font-size:.82rem}
+  }
+</style>
+
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <h1>Rotation Break Tracker</h1>
+      <div class="sub">Fast restroom-break tracking for your team</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+      <div class="pill" id="liveTime">--:-- --</div>
+      <div class="pill" id="todayLabel"></div>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><span>Currently Out</span><b id="outCount">0</b></div>
+    <div class="stat"><span>Completed Today</span><b id="todayCount">0</b></div>
+    <div class="stat"><span>Rotations Today</span><b id="todayRotations">0</b></div>
+  </div>
+
+  <nav>
+    <button class="active" data-tab="team">Team</button>
+    <button data-tab="today">Today</button>
+    <button data-tab="history">History</button>
+    <button data-tab="manage">Manage</button>
+  </nav>
+
+  <section id="team" class="section active">
+    <div class="panel">
+      <div class="panel-title"><h2>Your Team</h2><span class="muted small">Tap a person to start/end</span></div>
+      <div id="teamGrid" class="team-grid"></div>
+    </div>
+  </section>
+
+  <section id="today" class="section">
+    <div class="panel">
+      <div class="panel-title"><h2>Today's Breaks</h2></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Team Member</th><th>Start Rot.</th><th>Start Time</th><th>End Rot.</th><th>End Time</th><th>Minutes</th><th>Rotations</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="todayBody"></tbody>
+      </table></div>
+      <div id="todayEmpty" class="empty">No completed breaks yet today.</div>
+    </div>
+  </section>
+
+  <section id="history" class="section">
+    <div class="panel">
+      <div class="panel-title">
+        <h2>Break History</h2>
+        <button class="secondary" onclick="exportCSV()">Export CSV</button>
+      </div>
+      <div class="filters">
+        <div><label>Team member</label><select id="filterMember"></select></div>
+        <div><label>Date</label><input type="date" id="filterDate"></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Team Member</th><th>Start Rot.</th><th>Start Time</th><th>End Rot.</th><th>End Time</th><th>Minutes</th><th>Rotations</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table></div>
+      <div id="historyEmpty" class="empty">No matching records.</div>
+    </div>
+  </section>
+
+  <section id="manage" class="section">
+    <div class="panel">
+      <div class="panel-title"><h2>Manage Team</h2></div>
+      <div class="field">
+        <label>Add team member</label>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px">
+          <input id="newMemberName" placeholder="Enter name">
+          <button class="primary" onclick="addMember()">Add</button>
+        </div>
+      </div>
+      <div id="memberList" class="member-list"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><h2>Data</h2></div>
+      <div class="toolbar">
+        <button class="primary" id="installBtn" style="display:none">Install App</button>
+        <button class="secondary" onclick="exportCSV()">Export CSV</button>
+        <button class="secondary" onclick="exportBackup()">Backup JSON</button>
+        <label class="secondary" style="display:inline-flex;align-items:center;cursor:pointer">
+          Restore Backup<input type="file" accept=".json" onchange="importBackup(event)" style="display:none">
+        </label>
+      </div>
+      <p class="muted small">Your records are stored only in this browser on this device. Export a backup periodically if the records matter long-term.</p>
+    </div>
+  </section>
+
+  <footer>Local-only app. No account, subscription, ads, or cloud upload.</footer>
+</div>
+
+<div id="modalBackdrop" class="modal-backdrop">
+  <div class="modal">
+    <h3 id="modalTitle"></h3>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<script>
+const TEAM_KEY='rotationBreakTeamV1';
+const BREAKS_KEY='rotationBreakRecordsV1';
+const ACTIVE_KEY='rotationBreakActiveV1';
+
+let team = JSON.parse(localStorage.getItem(TEAM_KEY) || 'null') || [
+  {id:crypto.randomUUID(),name:'Team Member 1',active:true},
+  {id:crypto.randomUUID(),name:'Team Member 2',active:true},
+  {id:crypto.randomUUID(),name:'Team Member 3',active:true},
+  {id:crypto.randomUUID(),name:'Team Member 4',active:true}
+];
+let breaks = JSON.parse(localStorage.getItem(BREAKS_KEY) || '[]');
+let activeBreaks = JSON.parse(localStorage.getItem(ACTIVE_KEY) || '{}');
+
+const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
+
+function save(){
+  localStorage.setItem(TEAM_KEY,JSON.stringify(team));
+  localStorage.setItem(BREAKS_KEY,JSON.stringify(breaks));
+  localStorage.setItem(ACTIVE_KEY,JSON.stringify(activeBreaks));
+}
+function localDateKey(d=new Date()){
+  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function escapeHtml(v=''){
+  return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+}
+function validRotation(v){return /^\d{4}$/.test(v)}
+function rotationDiff(start,end){
+  return (parseInt(end,10)-parseInt(start,10)+10000)%10000;
+}
+function formatTime(iso){
+  if(!iso) return '';
+  return new Date(iso).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+}
+function elapsedMinutes(startIso,endIso){
+  if(!startIso||!endIso) return '';
+  return Math.max(0,Math.round((new Date(endIso)-new Date(startIso))/60000));
+}
+function memberName(id){return team.find(x=>x.id===id)?.name || 'Unknown'}
+function closeModal(){$('#modalBackdrop').classList.remove('show')}
+function openModal(title,html){
+  $('#modalTitle').textContent=title; $('#modalContent').innerHTML=html; $('#modalBackdrop').classList.add('show');
+}
+$('#modalBackdrop').addEventListener('click',e=>{if(e.target.id==='modalBackdrop')closeModal()});
+
+function startBreak(id){
+  if(activeBreaks[id]) return;
+  openModal(`Start break · ${memberName(id)}`,`
+    <div class="field"><label>Starting rotation</label>
+      <input id="startRotation" class="big-rotation" inputmode="numeric" maxlength="4" placeholder="0000">
+    </div>
+    <div class="field"><label>Notes (optional)</label><textarea id="startNotes" rows="2" placeholder="Optional note"></textarea></div>
+    <div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="confirmStart('${id}')">Start Break</button></div>
+  `);
+  setTimeout(()=>$('#startRotation').focus(),50);
+}
+function confirmStart(id){
+  const rot=$('#startRotation').value.trim();
+  if(!validRotation(rot)){alert('Enter exactly 4 numeric digits, for example 0427.');return}
+  activeBreaks[id]={startRotation:rot,notes:$('#startNotes').value.trim(),startedAt:new Date().toISOString()};
+  save();closeModal();render();
+}
+function endBreak(id){
+  const a=activeBreaks[id]; if(!a)return;
+  openModal(`End break · ${memberName(id)}`,`
+    <p class="muted">Started at rotation <b style="color:#fcd34d">${a.startRotation}</b></p>
+    <div class="field"><label>Ending rotation</label>
+      <input id="endRotation" class="big-rotation" inputmode="numeric" maxlength="4" placeholder="0000">
+    </div>
+    <div class="field"><label>Notes</label><textarea id="endNotes" rows="2">${escapeHtml(a.notes||'')}</textarea></div>
+    <div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="confirmEnd('${id}')">Save Return</button></div>
+  `);
+  setTimeout(()=>$('#endRotation').focus(),50);
+}
+function confirmEnd(id){
+  const end=$('#endRotation').value.trim();
+  if(!validRotation(end)){alert('Enter exactly 4 numeric digits.');return}
+  const a=activeBreaks[id];
+  const diff=rotationDiff(a.startRotation,end);
+  if(!confirm(`Save return at ${end}? Total away: ${diff} rotation${diff===1?'':'s'}.`))return;
+  breaks.unshift({
+    id:crypto.randomUUID(),memberId:id,date:localDateKey(),startRotation:a.startRotation,endRotation:end,
+    rotations:diff,notes:$('#endNotes').value.trim(),startedAt:a.startedAt,endedAt:new Date().toISOString(),edited:false
+  });
+  delete activeBreaks[id];
+  save();closeModal();render();
+}
+function editRecord(id){
+  const r=breaks.find(x=>x.id===id); if(!r)return;
+  openModal(`Edit record · ${memberName(r.memberId)}`,`
+    <div class="field"><label>Date</label><input id="editDate" type="date" value="${r.date}"></div>
+    <div class="field"><label>Start rotation</label><input id="editStart" class="big-rotation" inputmode="numeric" maxlength="4" value="${r.startRotation}"></div>
+    <div class="field"><label>End rotation</label><input id="editEnd" class="big-rotation" inputmode="numeric" maxlength="4" value="${r.endRotation}"></div>
+    <div class="field"><label>Notes</label><textarea id="editNotes" rows="2">${escapeHtml(r.notes||'')}</textarea></div>
+    <div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveEdit('${id}')">Save Changes</button></div>
+  `);
+}
+function saveEdit(id){
+  const r=breaks.find(x=>x.id===id); if(!r)return;
+  const s=$('#editStart').value.trim(),e=$('#editEnd').value.trim();
+  if(!validRotation(s)||!validRotation(e)){alert('Start and end must each be exactly 4 digits.');return}
+  r.date=$('#editDate').value;r.startRotation=s;r.endRotation=e;r.rotations=rotationDiff(s,e);
+  r.notes=$('#editNotes').value.trim();r.edited=true;r.editedAt=new Date().toISOString();
+  save();closeModal();render();
+}
+function deleteRecord(id){
+  if(!confirm('Delete this break record?'))return;
+  breaks=breaks.filter(x=>x.id!==id);save();render();
+}
+function addMember(){
+  const el=$('#newMemberName'),name=el.value.trim();if(!name)return;
+  team.push({id:crypto.randomUUID(),name,active:true});el.value='';save();render();
+}
+function renameMember(id){
+  const m=team.find(x=>x.id===id);if(!m)return;
+  const n=prompt('Team member name:',m.name);if(n && n.trim()){m.name=n.trim();save();render()}
+}
+function toggleMember(id){
+  const m=team.find(x=>x.id===id);if(!m)return;
+  if(activeBreaks[id]){alert('End this person’s active break before deactivating them.');return}
+  m.active=!m.active;save();render();
+}
+function moveMember(id,dir){
+  const i=team.findIndex(x=>x.id===id),j=i+dir;if(i<0||j<0||j>=team.length)return;
+  [team[i],team[j]]=[team[j],team[i]];save();render();
+}
+function exportCSV(){
+  const rows=[['Date','Team Member','Start Rotation','Start Time','End Rotation','End Time','Elapsed Minutes','Rotations Away','Notes','Edited']];
+  [...breaks].reverse().forEach(r=>rows.push([
+    r.date,
+    memberName(r.memberId),
+    r.startRotation,
+    formatTime(r.startedAt),
+    r.endRotation,
+    formatTime(r.endedAt),
+    elapsedMinutes(r.startedAt,r.endedAt),
+    r.rotations,
+    r.notes||'',
+    r.edited?'Yes':'No'
+  ]));
+  const csv=rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadBlob(csv,`rotation-break-history-${localDateKey()}.csv`,'text/csv');
+}
+function exportBackup(){
+  const data=JSON.stringify({version:1,team,breaks,activeBreaks,exportedAt:new Date().toISOString()},null,2);
+  downloadBlob(data,`rotation-break-backup-${localDateKey()}.json`,'application/json');
+}
+function downloadBlob(text,name,type){
+  const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),500);
+}
+function importBackup(ev){
+  const file=ev.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const d=JSON.parse(reader.result);
+      if(!Array.isArray(d.team)||!Array.isArray(d.breaks))throw new Error();
+      if(!confirm('Restore this backup? Current data will be replaced.'))return;
+      team=d.team;breaks=d.breaks;activeBreaks=d.activeBreaks||{};save();render();alert('Backup restored.');
+    }catch{alert('That file does not look like a valid Rotation Break Tracker backup.')}
+  };
+  reader.readAsText(file);ev.target.value='';
+}
+
+function renderTeam(){
+  const activeTeam=team.filter(m=>m.active);
+  $('#teamGrid').innerHTML=activeTeam.map(m=>{
+    const a=activeBreaks[m.id];
+    return `<div class="member ${a?'out':''}">
+      <div class="member-top"><div class="name">${escapeHtml(m.name)}</div><div class="status ${a?'out':'in'}">${a?'OUT':'AVAILABLE'}</div></div>
+      <div>${a?`<div class="rot">Left rotation: <b>${a.startRotation}</b></div><div class="muted small">Tap return when they come back</div>`:`<div class="muted">Ready</div><div class="muted small">Tap to record restroom break</div>`}</div>
+      <button onclick="${a?`endBreak('${m.id}')`:`startBreak('${m.id}')`}">${a?'RETURN':'START BREAK'}</button>
+    </div>`;
+  }).join('') || '<div class="empty">Add team members under Manage.</div>';
+}
+function renderToday(){
+  const today=localDateKey(),records=breaks.filter(r=>r.date===today);
+  $('#todayBody').innerHTML=records.map(r=>`<tr>
+    <td><b>${escapeHtml(memberName(r.memberId))}</b>${r.edited?'<div class="edited">EDITED</div>':''}</td>
+    <td>${r.startRotation}</td>
+    <td>${formatTime(r.startedAt)}</td>
+    <td>${r.endRotation}</td>
+    <td>${formatTime(r.endedAt)}</td>
+    <td><b>${elapsedMinutes(r.startedAt,r.endedAt)}</b></td>
+    <td><b>${r.rotations}</b></td>
+    <td>${escapeHtml(r.notes||'')}</td>
+    <td><button class="secondary" onclick="editRecord('${r.id}')">Edit</button></td>
+  </tr>`).join('');
+  $('#todayEmpty').style.display=records.length?'none':'block';
+}
+function renderHistory(){
+  const sel=$('#filterMember'),date=$('#filterDate')?.value||'',memberVal=sel?.value||'';
+  const options=['<option value="">All team members</option>',...team.map(m=>`<option value="${m.id}" ${m.id===memberVal?'selected':''}>${escapeHtml(m.name)}</option>`)];
+  sel.innerHTML=options.join('');
+  let records=breaks.filter(r=>(!sel.value||r.memberId===sel.value)&&(!$('#filterDate').value||r.date===$('#filterDate').value));
+  $('#historyBody').innerHTML=records.map(r=>`<tr>
+    <td>${r.date}</td>
+    <td><b>${escapeHtml(memberName(r.memberId))}</b>${r.edited?'<div class="edited">EDITED</div>':''}</td>
+    <td>${r.startRotation}</td>
+    <td>${formatTime(r.startedAt)}</td>
+    <td>${r.endRotation}</td>
+    <td>${formatTime(r.endedAt)}</td>
+    <td><b>${elapsedMinutes(r.startedAt,r.endedAt)}</b></td>
+    <td><b>${r.rotations}</b></td>
+    <td>${escapeHtml(r.notes||'')}</td>
+    <td><div class="toolbar"><button class="secondary" onclick="editRecord('${r.id}')">Edit</button><button class="danger" onclick="deleteRecord('${r.id}')">Delete</button></div></td>
+  </tr>`).join('');
+  $('#historyEmpty').style.display=records.length?'none':'block';
+}
+function renderManage(){
+  $('#memberList').innerHTML=team.map((m,i)=>`<div class="manage-row">
+    <div><b>${escapeHtml(m.name)}</b><div class="muted small">${m.active?'Active':'Inactive'}</div></div>
+    <div class="toolbar">
+      <button class="secondary" onclick="moveMember('${m.id}',-1)" ${i===0?'disabled':''}>↑</button>
+      <button class="secondary" onclick="moveMember('${m.id}',1)" ${i===team.length-1?'disabled':''}>↓</button>
+      <button class="secondary" onclick="renameMember('${m.id}')">Rename</button>
+    </div>
+    <button class="${m.active?'danger':'primary'}" onclick="toggleMember('${m.id}')">${m.active?'Deactivate':'Activate'}</button>
+  </div>`).join('');
+}
+function renderStats(){
+  const today=localDateKey(),records=breaks.filter(r=>r.date===today);
+  $('#outCount').textContent=Object.keys(activeBreaks).length;
+  $('#todayCount').textContent=records.length;
+  $('#todayRotations').textContent=records.reduce((s,r)=>s+Number(r.rotations||0),0);
+  $('#todayLabel').textContent=new Date().toLocaleDateString(undefined,{month:'short',day:'numeric'});
+}
+function render(){renderTeam();renderToday();renderHistory();renderManage();renderStats()}
+$$('nav button').forEach(b=>b.addEventListener('click',()=>{
+  $$('nav button').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+  $$('.section').forEach(x=>x.classList.remove('active'));$('#'+b.dataset.tab).classList.add('active');
+}));
+$('#filterMember').addEventListener('change',renderHistory);
+$('#filterDate').addEventListener('change',renderHistory);
+function updateClock(){
+  const now=new Date();
+  $('#liveTime').textContent=now.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',second:'2-digit'});
+  $('#todayLabel').textContent=now.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+}
+updateClock();
+setInterval(updateClock,1000);
+render();
+</script>
+
+<script>
+let deferredInstallPrompt = null;
+const installBtn = document.getElementById('installBtn');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if (installBtn) installBtn.style.display = 'inline-block';
+});
+
+if (installBtn) {
+  installBtn.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    installBtn.style.display = 'none';
+  });
+}
+
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  if (installBtn) installBtn.style.display = 'none';
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+  });
+}
+</script>
+
+</body>
+</html>
