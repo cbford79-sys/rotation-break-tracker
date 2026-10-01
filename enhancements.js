@@ -1,7 +1,7 @@
-/* Rotation Break Tracker enhancements v8: roster order, attendance, coverage */
+/* Rotation Break Tracker enhancements v9: roster order, attendance, coverage */
 (()=>{
   const ATTENDANCE_KEY='rotationAttendanceV1';
-  const STATUSES=['Present','AWOL','Vacation','Personal','Call-In','Other'];
+  const STATUSES=['Present','Out Today','AWOL','Vacation','Personal','Call-In','FMLA','Training','Early Out','Other'];
   let attendance=JSON.parse(localStorage.getItem(ATTENDANCE_KEY)||'{}');
   const baseSave=save;
   save=function(){baseSave();localStorage.setItem(ATTENDANCE_KEY,JSON.stringify(attendance));};
@@ -15,10 +15,11 @@
   const teamSection=$('#team');
   if(teamSection && !$('#shiftOverview')){
     const wrap=document.createElement('div');wrap.id='shiftOverview';wrap.className='panel shift-overview';
-    wrap.innerHTML=`<div class="panel-title"><div><h2>Shift Overview</h2><div class="muted small" id="attendanceDateLabel"></div></div></div><div class="overview-grid"><div class="overview-item"><span>Present</span><b id="presentCount">0</b></div><div class="overview-item"><span>Unavailable</span><b id="absentCount">0</b></div><div class="overview-item"><span>Jobs Covered</span><b id="coveredCount">0</b></div><div class="overview-item"><span>Need Coverage</span><b id="uncoveredCount">0</b></div></div><div id="coverageList" class="coverage-list"></div>`;
+    wrap.innerHTML=`<div class="panel-title"><div><h2>Shift Overview</h2><div class="muted small" id="attendanceDateLabel"></div></div></div><div class="overview-grid"><div class="overview-item"><span>Active Today</span><b id="presentCount">0</b></div><div class="overview-item"><span>Out Today</span><b id="absentCount">0</b></div><div class="overview-item"><span>Jobs Covered</span><b id="coveredCount">0</b></div><div class="overview-item"><span>Need Coverage</span><b id="uncoveredCount">0</b></div></div><div id="coverageList" class="coverage-list"></div>`;
     teamSection.prepend(wrap);
   }
 
+  const outPanel=document.createElement('div');outPanel.className='panel';outPanel.id='outTodayPanel';outPanel.innerHTML='<div class="panel-title"><h2>Out Today</h2></div><div class="muted small">Saved on your roster. Automatically available again next workday.</div><div id="outTodayList" class="coverage-list"></div>';teamSection.appendChild(outPanel);
   const managePanel=$('#manage .panel');
   if(managePanel){
     const h2=managePanel.querySelector('h2');
@@ -31,7 +32,7 @@
   function getAttendance(id,date=localDateKey()){return attendance[date]?.[id]||'Present';}
   function isAvailable(id,date=localDateKey()){const m=getMember(id);return !!m&&m.active!==false&&getAttendance(id,date)==='Present';}
   function nextAvailableOperator(id){const roster=activeTeam(),start=roster.findIndex(m=>m.id===id);if(start<0||roster.length<2)return null;for(let n=1;n<roster.length;n++){const c=roster[(start+n)%roster.length];if(isAvailable(c.id))return c;}return null;}
-  window.setAttendance=function(id,status){if(!STATUSES.includes(status))status='Present';const date=localDateKey();attendance[date]=attendance[date]||{};attendance[date][id]=status;if(status!=='Present'&&activeBreaks[id])delete activeBreaks[id];save();render();};
+  window.setAttendance=function(id,status){if(!STATUSES.includes(status))status='Present';if(status!=='Present'&&activeBreaks[id]){alert('Record this worker’s break return before marking them Out Today.');render();return;}const date=localDateKey();attendance[date]=attendance[date]||{};attendance[date][id]=status;save();render();};
   function attendanceSelect(m){const current=getAttendance(m.id);return `<div><div class="attendance-label">TODAY'S ATTENDANCE</div><select onchange="setAttendance('${m.id}',this.value)">${STATUSES.map(s=>`<option ${s===current?'selected':''}>${s}</option>`).join('')}</select></div>`;}
 
   const originalStartBreak=startBreak;
@@ -42,20 +43,26 @@
   window.restoreMember=function(id){const m=getMember(id);if(!m)return;m.active=true;save();render();};
 
   renderTeam=function(){
-    $('#teamGrid').innerHTML=activeTeam().map(m=>{const a=activeBreaks[m.id],att=getAttendance(m.id),present=att==='Present',next=present?null:nextAvailableOperator(m.id);return `<div class="member ${present?'':'absent'}"><div class="member-top"><div class="name">${escapeHtml(m.name)}</div><span class="status">${a?'OUT':present?'AVAILABLE':escapeHtml(att).toUpperCase()}</span></div>${m.crew?crewBadge(m.crew):''}<div class="job-badge">Job: ${escapeHtml(m.job||'Not assigned')}</div>${attendanceSelect(m)}${present?(a?`<div class="rot">Left rotation: <b>${a.startRotation}</b></div>`:'<div class="muted">Ready</div>'):`<div class="coverage"><div>${escapeHtml(att)}</div><strong>${next?'Next operator: '+escapeHtml(next.name):'No available operator'}</strong></div>`}${present?`<button class="primary" onclick="${a?`endBreak('${m.id}')`:`startBreak('${m.id}')`}">${a?'RETURN':'START BREAK'}</button>`:''}</div>`;}).join('')||'<div class="empty">Add team members under Manage.</div>';
+    $('#teamGrid').innerHTML=activeTeam().filter(m=>isAvailable(m.id)).map(m=>{const a=activeBreaks[m.id],att=getAttendance(m.id),present=att==='Present',next=present?null:nextAvailableOperator(m.id);return `<div class="member ${present?'':'absent'}"><div class="member-top"><div class="name">${escapeHtml(m.name)}</div><span class="status">${a?'OUT':present?'AVAILABLE':escapeHtml(att).toUpperCase()}</span></div>${m.crew?crewBadge(m.crew):''}<div class="job-badge">Job: ${escapeHtml(m.job||'Not assigned')}</div>${attendanceSelect(m)}<button class="secondary" onclick="setAttendance('${m.id}','Out Today')">Out Today</button>${present?(a?`<div class="rot">Left rotation: <b>${a.startRotation}</b></div>`:'<div class="muted">Ready</div>'):`<div class="coverage"><div>${escapeHtml(att)}</div><strong>${next?'Next operator: '+escapeHtml(next.name):'No available operator'}</strong></div>`}${present?`<button class="primary" onclick="${a?`endBreak('${m.id}')`:`startBreak('${m.id}')`}">${a?'RETURN':'START BREAK'}</button>`:''}</div>`;}).join('')||'<div class="empty">'+(activeTeam().length?'Everyone is Out Today. Restore a worker below.':'Add team members under Manage.')+'</div>';
+    const absent=activeTeam().filter(m=>!isAvailable(m.id));
+    $('#outTodayPanel').hidden=!absent.length;
+    $('#outTodayList').innerHTML=absent.map(m=>`<div class="manage-row"><b>${escapeHtml(m.name)}</b>${m.crew?crewBadge(m.crew):''}<div class="muted small">Job: ${escapeHtml(m.job||'Not assigned')}</div>${attendanceSelect(m)}<div class="toolbar" style="margin-top:8px"><button class="primary" onclick="setAttendance('${m.id}','Present')">Return to Team</button></div></div>`).join('');
   };
 
   function renderOverview(){const roster=activeTeam(),present=roster.filter(m=>isAvailable(m.id)),absent=roster.filter(m=>!isAvailable(m.id)),coverage=absent.map(m=>({m,next:nextAvailableOperator(m.id)}));$('#presentCount').textContent=present.length;$('#absentCount').textContent=absent.length;$('#coveredCount').textContent=coverage.filter(x=>x.next).length;$('#uncoveredCount').textContent=coverage.filter(x=>!x.next).length;$('#attendanceDateLabel').textContent='Attendance · '+new Date().toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});$('#coverageList').innerHTML=coverage.length?coverage.map(({m,next})=>`<div class="coverage-card"><div><b>${escapeHtml(m.job||'Unassigned job')}</b><div class="muted small">${escapeHtml(m.name)} · ${escapeHtml(getAttendance(m.id))}</div></div><div class="arrow">${next?`Next: ${escapeHtml(next.name)} ➜`:'NO AVAILABLE OPERATOR'}</div></div>`).join(''):'<div class="muted small">Full crew available. No coverage changes needed.</div>';}
 
-  renderManage=function(){const roster=activeTeam(),removed=team.filter(m=>m.active===false);$('#memberList').innerHTML=roster.map((m,i)=>`<div class="manage-row"><div><span class="order-badge">${i+1}</span><b>${escapeHtml(m.name)}</b>${m.crew?crewBadge(m.crew):''}</div><div class="muted small" style="margin-top:5px">Job: ${escapeHtml(m.job||'Not assigned')} · Today: ${escapeHtml(getAttendance(m.id))}</div><div class="toolbar" style="margin-top:8px"><button class="secondary" onclick="moveMember('${m.id}',-1)" ${i===0?'disabled':''}>↑ Up</button><button class="secondary" onclick="moveMember('${m.id}',1)" ${i===roster.length-1?'disabled':''}>↓ Down</button><button class="secondary" onclick="changeCrew('${m.id}')">Change Crew</button><button class="secondary" onclick="changeJob('${m.id}')">Change Job</button><button class="danger" onclick="removeMember('${m.id}')">Delete</button></div></div>`).join('')+(removed.length?`<div class="muted small" style="margin:14px 0 4px">REMOVED TEAM MEMBERS</div>${removed.map(m=>`<div class="manage-row removed"><b>${escapeHtml(m.name)}</b>${m.crew?crewBadge(m.crew):''}<div class="muted small">History retained</div><div class="toolbar" style="margin-top:8px"><button class="secondary" onclick="restoreMember('${m.id}')">Restore</button></div></div>`).join('')}`:'');};
+  renderManage=function(){const roster=activeTeam(),removed=team.filter(m=>m.active===false);$('#memberList').innerHTML=roster.map((m,i)=>`<div class="manage-row"><div><span class="order-badge">${i+1}</span><b>${escapeHtml(m.name)}</b>${m.crew?crewBadge(m.crew):''}</div><div class="muted small" style="margin-top:5px">Job: ${escapeHtml(m.job||'Not assigned')} · Today: ${escapeHtml(getAttendance(m.id))}</div><div class="toolbar" style="margin-top:8px"><button class="secondary" onclick="moveMember('${m.id}',-1)" ${i===0?'disabled':''}>↑ Up</button><button class="secondary" onclick="moveMember('${m.id}',1)" ${i===roster.length-1?'disabled':''}>↓ Down</button><button class="secondary" onclick="changeCrew('${m.id}')">Change Crew</button><button class="secondary" onclick="changeJob('${m.id}')">Change Job</button><button class="secondary" onclick="setAttendance('${m.id}','${isAvailable(m.id)?'Out Today':'Present'}')">${isAvailable(m.id)?'Out Today':'Return to Team'}</button><button class="danger" onclick="removeMember('${m.id}')">Delete</button></div></div>`).join('')+(removed.length?`<div class="muted small" style="margin:14px 0 4px">REMOVED TEAM MEMBERS</div>${removed.map(m=>`<div class="manage-row removed"><b>${escapeHtml(m.name)}</b>${m.crew?crewBadge(m.crew):''}<div class="muted small">History retained</div><div class="toolbar" style="margin-top:8px"><button class="secondary" onclick="restoreMember('${m.id}')">Restore</button></div></div>`).join('')}`:'');};
 
   window.exportAttendanceCSV=function(){const rows=[['Date','Team Member','Job','Attendance']];Object.keys(attendance).sort().forEach(date=>team.forEach(m=>rows.push([date,m.name,m.job,attendance[date]?.[m.id]||'Present'])));downloadBlob(makeCSV(rows),'rotation-attendance-history.csv','text/csv');};
-  exportBackup=function(){downloadBlob(JSON.stringify({version:8,team,breaks,activeBreaks,repairs,attendance},null,2),'rotation-break-backup.json','application/json');};
+  exportBackup=function(){downloadBlob(JSON.stringify({version:9,team,breaks,activeBreaks,repairs,attendance},null,2),'rotation-break-backup.json','application/json');};
 
   const toolbar=$('#manage .panel:last-child .toolbar');
   if(toolbar&&!$('#attendanceExportBtn')){const b=document.createElement('button');b.id='attendanceExportBtn';b.className='secondary';b.textContent='Export Attendance CSV';b.onclick=exportAttendanceCSV;toolbar.insertBefore(b,toolbar.children[1]||null);}
 
   const baseRender=render;
   render=function(){baseRender();renderOverview();};
+  let displayedDate=localDateKey();
+  function refreshDay(){const date=localDateKey();if(date!==displayedDate){displayedDate=date;render();}}
+  setInterval(refreshDay,1000);document.addEventListener('visibilitychange',refreshDay);window.addEventListener('focus',refreshDay);
   render();
 })();
